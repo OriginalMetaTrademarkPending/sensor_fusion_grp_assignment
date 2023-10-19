@@ -63,11 +63,15 @@ class ModelIMU:
         Returns:
             z_corr: corrected IMU measurement
         """
-        acc_est = 
-        avel_est = np.zeros(3)
+        #a_n = MultiVarGauss(np.zeros(3), np.diag(self.accm_bias_std**2))
+        #w_n = MultiVarGauss(np.zeros, np.diag(self.gyro_bias_std**2))
+                            
 
-        # TODO remove this
-        z_corr = models_solu.ModelIMU.correct_z_imu(self, x_est_nom, z_imu)
+        acc_est = x_est_nom.ori.as_rotmat()@(self.accm_correction@z_imu.acc) # - np.array([self.accm_bias_std]*3) - np.array([self.accm_std]*3)
+        avel_est = (self.gyro_correction@z_imu.avel)# - np.array([self.gyro_bias_std]*3) - np.array([self.gyro_std]*3)
+        z_corr = CorrectedImuMeasurement(acc_est, avel_est)
+        # # TODO remove this
+        # z_corr = models_solu.ModelIMU.correct_z_imu(self, x_est_nom, z_imu)
         return z_corr
 
     def predict_nom(self,

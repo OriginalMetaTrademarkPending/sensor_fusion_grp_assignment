@@ -49,9 +49,7 @@ class RotationQuaterion(NamedArray):
 
     def conjugate(self) -> 'RotationQuaterion':
         """Get the conjugate of the RotationQuaternion"""
-
-        conj = RotationQuaterion(self.eta, -self.epsilon)
-        return conj
+        return RotationQuaterion(self.eta, -self.epsilon)
 
     def diff(self, other: 'RotationQuaterion') -> 'RotationQuaterion':
         """Get the difference between two quaternions3
