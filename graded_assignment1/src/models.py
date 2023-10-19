@@ -63,12 +63,15 @@ class ModelIMU:
         Returns:
             z_corr: corrected IMU measurement
         """
-        acc_est = 
-        avel_est = np.zeros(3)
+
+        acc_est = self.accm_correction @ (z_imu.acc - x_est_nom.accm_bias)
+        avel_est = self.accm_correction @ (z_imu.avel - x_est_nom.gyro_bias )
+
+        return CorrectedImuMeasurement(acc_est, avel_est)
 
         # TODO remove this
-        z_corr = models_solu.ModelIMU.correct_z_imu(self, x_est_nom, z_imu)
-        return z_corr
+        #z_corr = models_solu.ModelIMU.correct_z_imu(self, x_est_nom, z_imu)
+        #return z_corr
 
     def predict_nom(self,
                     x_est_nom: NominalState,
@@ -89,19 +92,28 @@ class ModelIMU:
         Returns:
             x_nom_pred: predicted nominal state
         """
-        pos_pred = np.zeros(3)  # TODO
-        vel_pred = np.zeros(3)  # TODO
 
-        delta_rot = RotationQuaterion(1, np.zeros(3))  # TODO
-        ori_pred = np.zeros(3)  # TODO
+        #a = z_corr.acc + self.g
 
-        acc_bias_pred = np.zeros(3)  # TODO
-        gyro_bias_pred = np.zeros(3)  # TODO
+        pos_pred = x_est_nom.pos + dt*x_est_nom.vel + dt**2/2 * z_corr.acc # TODO
+        vel_pred = x_est_nom.vel + dt * z_corr.acc  # TODO
+
+        kappa   =   dt * z_corr.avel
+        eta     =   np.cos(np.linalg.norm(kappa, 2) / 2)
+        epsilon =   np.sin(np.linalg.norm(kappa, 2) / 2) / np.linalg.norm(kappa, 2) * kappa.T
+    
+        delta_rot = RotationQuaterion.from_avec(z_corr.avel)  # TODO
+        ori_pred =  x_est_nom.ori @ delta_rot # TODO
+
+        acc_bias_pred =  x_est_nom.accm_bias  - self.accm_bias_p  * np.eye(3) @ x_est_nom.accm_bias * dt     # TODO
+        gyro_bias_pred = x_est_nom.gyro_bias - self.gyro_bias_p * np.eye(3) @ x_est_nom.gyro_bias * dt   # TODO
+
+        return NominalState(pos_pred, vel_pred, ori_pred, acc_bias_pred, gyro_bias_pred)
 
         # TODO remove this
-        x_nom_pred = models_solu.ModelIMU.predict_nom(
-            self, x_est_nom, z_corr, dt)
-        return x_nom_pred
+        #x_nom_pred = models_solu.ModelIMU.predict_nom(
+        #    self, x_est_nom, z_corr, dt)
+        #return x_nom_pred
 
     def A_c(self,
             x_est_nom: NominalState,
