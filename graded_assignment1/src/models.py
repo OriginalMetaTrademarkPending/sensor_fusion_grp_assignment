@@ -63,16 +63,15 @@ class ModelIMU:
         Returns:
             z_corr: corrected IMU measurement
         """
-        #a_n = MultiVarGauss(np.zeros(3), np.diag(self.accm_bias_std**2))
-        #w_n = MultiVarGauss(np.zeros, np.diag(self.gyro_bias_std**2))
-                            
 
-        acc_est = x_est_nom.ori.as_rotmat()@(self.accm_correction@z_imu.acc) # - np.array([self.accm_bias_std]*3) - np.array([self.accm_std]*3)
-        avel_est = (self.gyro_correction@z_imu.avel)# - np.array([self.gyro_bias_std]*3) - np.array([self.gyro_std]*3)
-        z_corr = CorrectedImuMeasurement(acc_est, avel_est)
-        # # TODO remove this
-        # z_corr = models_solu.ModelIMU.correct_z_imu(self, x_est_nom, z_imu)
-        return z_corr
+        acc_est = self.accm_correction  @ (z_imu.acc - x_est_nom.accm_bias)
+        avel_est = self.accm_correction @ (z_imu.avel - x_est_nom.gyro_bias)
+
+        return CorrectedImuMeasurement(acc_est, avel_est)
+
+        # TODO remove this
+        #z_corr = models_solu.ModelIMU.correct_z_imu(self, x_est_nom, z_imu)
+        #return z_corr
 
     def predict_nom(self,
                     x_est_nom: NominalState,
@@ -93,14 +92,23 @@ class ModelIMU:
         Returns:
             x_nom_pred: predicted nominal state
         """
-        pos_pred = np.zeros(3)  # TODO
-        vel_pred = np.zeros(3)  # TODO
 
-        delta_rot = RotationQuaterion(1, np.zeros(3))  # TODO
-        ori_pred = np.zeros(3)  # TODO
+        #a = z_corr.acc + self.g
 
-        acc_bias_pred = np.zeros(3)  # TODO
-        gyro_bias_pred = np.zeros(3)  # TODO
+        pos_pred = x_est_nom.pos + dt*x_est_nom.vel + dt**2/2 * z_corr.acc # TODO
+        vel_pred = x_est_nom.vel + dt * z_corr.acc  # TODO
+
+        kappa   =   dt * z_corr.avel
+        eta     =   np.cos(np.linalg.norm(kappa, 2) / 2)
+        epsilon =   np.sin(np.linalg.norm(kappa, 2) / 2) / np.linalg.norm(kappa, 2) * kappa.T
+    
+        delta_rot = RotationQuaterion.from_avec(z_corr.avel)  # TODO
+        ori_pred =  x_est_nom.ori @ delta_rot # TODO
+
+        acc_bias_pred =  x_est_nom.accm_bias  - self.accm_bias_p  * np.eye(3) @ x_est_nom.accm_bias * dt     # TODO
+        gyro_bias_pred = x_est_nom.gyro_bias  - self.gyro_bias_p  * np.eye(3) @ x_est_nom.gyro_bias * dt   # TODO
+
+        #return NominalState(pos_pred, vel_pred, ori_pred, acc_bias_pred, gyro_bias_pred)
 
         # TODO remove this
         x_nom_pred = models_solu.ModelIMU.predict_nom(
@@ -132,8 +140,25 @@ class ModelIMU:
         S_acc = get_cross_matrix(z_corr.acc)
         S_omega = get_cross_matrix(z_corr.avel)
 
+        # Row 0
+        A_c[block_3x3(0,1)] = np.eye(3) 
+
+        # Row 1
+        A_c[block_3x3(1,2)] =  -Rq @ S_acc
+        A_c[block_3x3(1,3)] =  -Rq
+
+        # Row 2
+        A_c[block_3x3(2,2)] = -S_omega
+        A_c[block_3x3(2,4)] = -np.eye(3)
+
+        #Row 3
+        A_c[block_3x3(3,3)] = np.eye(3) ##-self.accm_bias_p*np.eye(3)
+
+        #Row 4
+        A_c[block_3x3(4,4)] = np.eye(3) #-self.gyro_bias_p*
+
         # TODO remove this
-        A_c = models_solu.ModelIMU.A_c(self, x_est_nom, z_corr)
+        #A_c = models_solu.ModelIMU.A_c(self, x_est_nom, z_corr)
         return A_c
 
     def get_error_G_c(self,
@@ -152,8 +177,23 @@ class ModelIMU:
         G_c = np.zeros((15, 12))
         Rq = x_est_nom.ori.as_rotmat()
 
+        # Row 0
+        # Empty
+
+        # Row 1
+        G_c[block_3x3(1,0)] = -Rq
+
+        # Row 2
+        G_c[block_3x3(2,1)] = -np.eye(3)
+
+        #Row 3
+        G_c[block_3x3(3,2)] = np.eye(3) ##-self.accm_bias_p*np.eye(3)
+
+        #Row 4
+        G_c[block_3x3(4,3)] = np.eye(3) #-self.gyro_bias_p*
+
         # TODO remove this
-        G_c = models_solu.ModelIMU.get_error_G_c(self, x_est_nom)
+        #G_c = models_solu.ModelIMU.get_error_G_c(self, x_est_nom)
 
         return G_c
 
