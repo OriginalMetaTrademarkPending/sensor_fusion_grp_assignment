@@ -92,17 +92,17 @@ class ModelIMU:
         Returns:
             x_nom_pred: predicted nominal state
         """
+        Rq = x_est_nom.ori.as_rotmat()
+        a = Rq@z_corr.acc + self.g
 
-        #a = z_corr.acc + self.g
-
-        pos_pred = x_est_nom.pos + dt*x_est_nom.vel + dt**2/2 * z_corr.acc # TODO
-        vel_pred = x_est_nom.vel + dt * z_corr.acc  # TODO
+        pos_pred = x_est_nom.pos + dt*x_est_nom.vel + dt**2/2 * a# TODO
+        vel_pred = x_est_nom.vel + dt * a  # TODO
 
         kappa   =   dt * z_corr.avel
         eta     =   np.cos(np.linalg.norm(kappa, 2) / 2)
         epsilon =   np.sin(np.linalg.norm(kappa, 2) / 2) / np.linalg.norm(kappa, 2) * kappa.T
     
-        delta_rot = RotationQuaterion.from_avec(z_corr.avel)  # TODO
+        delta_rot = RotationQuaterion.from_avec(kappa)  # TODO
         ori_pred =  x_est_nom.ori @ delta_rot # TODO
 
         acc_bias_pred =  x_est_nom.accm_bias  - self.accm_bias_p  * np.eye(3) @ x_est_nom.accm_bias * dt     # TODO
