@@ -140,22 +140,21 @@ class ModelIMU:
         S_acc = get_cross_matrix(z_corr.acc)
         S_omega = get_cross_matrix(z_corr.avel)
 
-        # Row 0
+       # Row 0
         A_c[block_3x3(0,1)] = np.eye(3) 
 
         # Row 1
         A_c[block_3x3(1,2)] =  -Rq @ S_acc
-        A_c[block_3x3(1,3)] =  -Rq
+        A_c[block_3x3(1,3)] =  -Rq @self.accm_correction #skal korrigeres
 
         # Row 2
         A_c[block_3x3(2,2)] = -S_omega
-        A_c[block_3x3(2,4)] = -np.eye(3)
+        A_c[block_3x3(2,4)] = -self.gyro_correction      #Skal korrigeres
 
         #Row 3
-        A_c[block_3x3(3,3)] = np.eye(3) ##-self.accm_bias_p*np.eye(3)
-
+        A_c[block_3x3(3,3)] = -self.accm_bias_p*np.eye(3) #Skal ikke korrigeres 
         #Row 4
-        A_c[block_3x3(4,4)] = np.eye(3) #-self.gyro_bias_p*
+        A_c[block_3x3(4,4)] = -self.gyro_bias_p*np.eye(3) #Skal ikke korrigeres 
 
         # TODO remove this
         #A_c = models_solu.ModelIMU.A_c(self, x_est_nom, z_corr)
