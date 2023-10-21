@@ -64,8 +64,8 @@ class ModelIMU:
             z_corr: corrected IMU measurement
         """
 
-        acc_est = self.accm_correction  @ (z_imu.acc - x_est_nom.accm_bias)
-        avel_est = self.accm_correction @ (z_imu.avel - x_est_nom.gyro_bias)
+        acc_est = self.accm_correction @ (z_imu.acc - x_est_nom.accm_bias)
+        avel_est = self.gyro_correction @ (z_imu.avel - x_est_nom.gyro_bias)
 
         return CorrectedImuMeasurement(acc_est, avel_est)
 
@@ -108,12 +108,12 @@ class ModelIMU:
         acc_bias_pred =  x_est_nom.accm_bias  - self.accm_bias_p  * np.eye(3) @ x_est_nom.accm_bias * dt     # TODO
         gyro_bias_pred = x_est_nom.gyro_bias  - self.gyro_bias_p  * np.eye(3) @ x_est_nom.gyro_bias * dt   # TODO
 
-        #return NominalState(pos_pred, vel_pred, ori_pred, acc_bias_pred, gyro_bias_pred)
+        return NominalState(pos_pred, vel_pred, ori_pred, acc_bias_pred, gyro_bias_pred)
 
         # TODO remove this
-        x_nom_pred = models_solu.ModelIMU.predict_nom(
-            self, x_est_nom, z_corr, dt)
-        return x_nom_pred
+        # x_nom_pred = models_solu.ModelIMU.predict_nom(
+        #     self, x_est_nom, z_corr, dt)
+        #return x_nom_pred
 
     def A_c(self,
             x_est_nom: NominalState,
