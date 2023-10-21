@@ -92,17 +92,17 @@ class ModelIMU:
         Returns:
             x_nom_pred: predicted nominal state
         """
+        Rq = x_est_nom.ori.as_rotmat()
+        a = Rq@z_corr.acc + self.g
 
-        #a = z_corr.acc + self.g
-
-        pos_pred = x_est_nom.pos + dt*x_est_nom.vel + dt**2/2 * z_corr.acc # TODO
-        vel_pred = x_est_nom.vel + dt * z_corr.acc  # TODO
+        pos_pred = x_est_nom.pos + dt*x_est_nom.vel + dt**2/2 * a# TODO
+        vel_pred = x_est_nom.vel + dt * a  # TODO
 
         kappa   =   dt * z_corr.avel
         eta     =   np.cos(np.linalg.norm(kappa, 2) / 2)
         epsilon =   np.sin(np.linalg.norm(kappa, 2) / 2) / np.linalg.norm(kappa, 2) * kappa.T
     
-        delta_rot = RotationQuaterion.from_avec(z_corr.avel)  # TODO
+        delta_rot = RotationQuaterion.from_avec(kappa)  # TODO
         ori_pred =  x_est_nom.ori @ delta_rot # TODO
 
         acc_bias_pred =  x_est_nom.accm_bias  - self.accm_bias_p  * np.eye(3) @ x_est_nom.accm_bias * dt     # TODO
@@ -140,22 +140,21 @@ class ModelIMU:
         S_acc = get_cross_matrix(z_corr.acc)
         S_omega = get_cross_matrix(z_corr.avel)
 
-        # Row 0
+       # Row 0
         A_c[block_3x3(0,1)] = np.eye(3) 
 
         # Row 1
         A_c[block_3x3(1,2)] =  -Rq @ S_acc
-        A_c[block_3x3(1,3)] =  -Rq
+        A_c[block_3x3(1,3)] =  -Rq @self.accm_correction #skal korrigeres
 
         # Row 2
         A_c[block_3x3(2,2)] = -S_omega
-        A_c[block_3x3(2,4)] = -np.eye(3)
+        A_c[block_3x3(2,4)] = -self.gyro_correction      #Skal korrigeres
 
         #Row 3
-        A_c[block_3x3(3,3)] = np.eye(3) ##-self.accm_bias_p*np.eye(3)
-
+        A_c[block_3x3(3,3)] = -self.accm_bias_p*np.eye(3) #Skal ikke korrigeres 
         #Row 4
-        A_c[block_3x3(4,4)] = np.eye(3) #-self.gyro_bias_p*
+        A_c[block_3x3(4,4)] = -self.gyro_bias_p*np.eye(3) #Skal ikke korrigeres 
 
         # TODO remove this
         #A_c = models_solu.ModelIMU.A_c(self, x_est_nom, z_corr)
@@ -219,20 +218,17 @@ class ModelIMU:
             A_d (ndarray[15, 15]): discrede transition matrix
             GQGT_d (ndarray[15, 15]): discrete noise covariance matrix
         """
-        A_c = None  # TODO
-        G_c = None  # TODO
-        GQGT_c = None  # TODO
+        A_c = self.A_c(x_est_nom, z_corr)  # TODO
+        G_c = self.get_error_G_c(x_est_nom)  # TODO
+        GQGT_c = G_c@self.Q_c@G_c.T  # TODO
+        zeros = np.zeros((15,15))
+        exponent = np.block([[-A_c, GQGT_c],[zeros, A_c.T]])*dt  # TODO
+        VanLoanMatrix = scipy.linalg.expm(exponent)  # TODO
 
-        exponent = None  # TODO
-        VanLoanMatrix = None  # TODO
+        A_d = VanLoanMatrix[15:,15:].T # TODO
+        GQGT_d = A_d@VanLoanMatrix[:15,15:]  # TODO
 
-        A_d = None  # TODO
-        GQGT_d = None  # TODO
-
-        # TODO remove this
-        A_d, GQGT_d = models_solu.ModelIMU.get_discrete_error_diff(
-            self, x_est_nom, z_corr, dt)
-
+        
         return A_d, GQGT_d
 
     def predict_err(self,
