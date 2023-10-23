@@ -51,7 +51,10 @@ class SensorGNSS:
         """
         x_est_nom = x_est.nom
         x_est_err = x_est.err
-        z_pred = x_est_nom.pos + self.H(x_est_nom)@(x_est_err.mean) #TODO
+        # We need h(x), the measurement model for the nominal state.
+        # The previously calculated H is the Jacobian of h(x) wrt the error state delta_x.
+        # The measurement prediction would then need to take both of these into account ??
+        z_pred = x_est_nom.pos + x_est_nom.ori.as_rotmat()@self.lever_arm # TODO
         S = self.H(x_est_nom)@x_est_err.cov@self.H(x_est_nom).T + self.R # TODO
 
         z_pred = GnssMeasurement.from_array(z_pred)
