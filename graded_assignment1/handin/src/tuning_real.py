@@ -40,8 +40,8 @@ x_est_init_nom_real = NominalState(
     pos=np.array([1, 0, -1.5]),  # position
     vel=np.array([0, 0, 0]),  # velocity
     ori=RotationQuaterion.from_euler([0, 0, np.deg2rad(90)]),  # orientation
-    accm_bias=np.ones(3)*0.1,  # accelerometer bias
-    gyro_bias=np.ones(3)*0.1,  # gyro bias
+    accm_bias=np.zeros(3),  # accelerometer bias
+    gyro_bias=np.zeros(3),  # gyro bias
 )
 
 x_err_init_std_real = np.repeat(repeats=3, a=[
