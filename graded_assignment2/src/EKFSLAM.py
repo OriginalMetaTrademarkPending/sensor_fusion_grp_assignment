@@ -215,78 +215,74 @@ class EKFSLAM:
         return zpred
 
     def h_jac(self, eta: np.ndarray) -> np.ndarray:
-        """Calculate the jacobian of h.
-
+       """Calculate the jacobian of h.
+    
         Parameters
         ----------
         eta : np.ndarray, shape=(3 + 2 * #landmarks,)
             The robot state and landmarks stacked.
-
+    
         Returns
         -------
         np.ndarray, shape=(2 * #landmarks, 3 + 2 * #landmarks)
             the jacobian of h wrt. eta.
-        """
-        #H = solution.EKFSLAM.EKFSLAM.h_jac(self, eta)
-        #return H
-
+       """
         # extract states and map
         x = eta[0:3]
         # reshape map (2, #landmarks), m[j] is the jth landmark
         m = eta[3:].reshape((-1, 2)).T
-
+    
         numM = m.shape[1]
-
+    
         Rot = rotmat2d(x[2])
-
+    
         # TODO, relative position of landmark to robot in world frame. m - rho that appears in (11.15) and (11.16)
-        delta_m = m - x[:2].reshape(2,1)
-
+        delta_m = [-x[:2]+m[:,j] for j in range(len(m[0]))]
+    
         # TODO, (2, #measurements), each measured position in cartesian coordinates like
-        zc = delta_m  - (self.sensor_offset @ Rot).reshape(2,1)
+        zc = [e[:,None]-Rot@self.sensor_offset[:,None] for e in delta_m]
         # [x coordinates;
         #  y coordinates]
-        zpred = self.h(eta) # TODO (2, #measurements), predicted measurements, like
+    
+        zpred = self.h(eta)  # TODO (2, #measurements), predicted measurements, like
         # [ranges;
         #  bearings]
-        zr = zpred[::2]  # TODO, ranges (fetch every second element which is range1 range2 etc ...)
-
+        #zr = [e for e in zpred[::2]]  # TODO, ranges
+    
         Rpihalf = rotmat2d(np.pi / 2)
-
+    
         # In what follows you can be clever and avoid making this for all the landmarks you _know_
         # you will not detect (the maximum range should be available from the data).
         # But keep it simple to begin with.
-
+    
         # Allocate H and set submatrices as memory views into H
         # You may or may not want to do this like this
         # TODO, see eq (11.15), (11.16), (11.17)
         H = np.zeros((2 * numM, 3 + 2 * numM))
         Hx = H[:, :3]  # slice view, setting elements of Hx will set H as well
         Hm = H[:, 3:]  # slice view, setting elements of Hm will set H as well
-
+    
         # proposed way is to go through landmarks one by one
         # preallocate and update this for some speed gain if looping
-        jac_z_cb = -np.eye(2, 3)
+        #jac_z_cb = -np.eye(2, 3)
         for i in range(numM):  # But this whole loop can be vectorized
-            ind = 2 * i  # starting postion of the ith landmark into H
+            #ind = 2 * i  # starting postion of the ith landmark into H
             # the inds slice for the ith landmark into H
-            inds = slice(ind, ind + 2)
-
+            #inds = slice(ind, ind + 2)
+            a = -Rpihalf@delta_m[i]
+            b = np.array([[-1, 0, a[0]],[0, -1, a[1]]])
+            c = (zc[i].T@b)[0]/(np.linalg.norm(zc[i],2))
+            d = (zc[i].T@Rpihalf.T@b)[0]/(np.linalg.norm(zc[i],2)**2)
+            hxi =np.array([c,d])
+    
+            Hx[i*2:(i+1)*2,:] = hxi
+    
+            upper = zc[i].T*np.linalg.norm(zc[i],2)/(np.linalg.norm(zc[i],2)**2)
+            lower = zc[i].T@Rpihalf/(np.linalg.norm(zc[i],2)**2)
+            hmi= np.array([upper[0], -lower[0]])  #minus because i don't fuckig know.
+            Hm[i*2:(i+1)*2,i*2:(i+1)*2] = hmi
             # TODO: Set H or Hx and Hm here
-
-            test1 = np.zeros([2,10])
-            test1[:, 2:] = (-Rpihalf @ (delta_m))
-            test1[block_nxm(0,0,2,2)] = -np.eye(2) 
-            test1 = zc.T / (np.linalg.norm(zc)) @ test1
-
-            Hx[block_nxm(i,0, 2, 3)] = test1
-
-            test2 = np.eye(2)
-            test2[0,:] = 1 / (zr[i]**2) * (zr[i] * delta_m[:, i].reshape(1,2))
-            test2[1,:] = 1 / (zr[i]**2) * (delta_m[: , i].reshape(1,2) @ Rpihalf)
-
-            Hm[block_nxm(i,i, 2, 2)] = test2
-
+    
         # TODO: You can set some assertions here to make sure that some of the structure in H is correct
         return H
 
