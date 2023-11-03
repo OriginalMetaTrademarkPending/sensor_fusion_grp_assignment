@@ -9,6 +9,25 @@ from JCBB import JCBB
 import utils
 import solution.EKFSLAM
 
+def block_nxm(i: int, j: int, n: int, m:int):
+    """used to generate nxm block slices
+    Modified version of block_2x2
+
+    n: rows
+    m: columns
+    arr[block33(0,1)] == arr[0:3, 3:6]
+    arr[block33(1,2)] == arr[3:6, 6:9]
+    ... 
+
+    Args:
+        i (int): row in (10.68)
+        j (int): column in (10.68)
+
+    Returns:
+        [type]: [description]
+    """
+    return slice(i*n, (i+1)*n), slice(j*m, (j+1)*m)
+
 
 @dataclass
 class EKFSLAM:
@@ -208,8 +227,8 @@ class EKFSLAM:
         np.ndarray, shape=(2 * #landmarks, 3 + 2 * #landmarks)
             the jacobian of h wrt. eta.
         """
-        H = solution.EKFSLAM.EKFSLAM.h_jac(self, eta)
-        return H
+        #H = solution.EKFSLAM.EKFSLAM.h_jac(self, eta)
+        #return H
 
         # extract states and map
         x = eta[0:3]
@@ -221,17 +240,16 @@ class EKFSLAM:
         Rot = rotmat2d(x[2])
 
         # TODO, relative position of landmark to robot in world frame. m - rho that appears in (11.15) and (11.16)
-        delta_m = None
+        delta_m = m - x[:2].reshape(2,1)
 
         # TODO, (2, #measurements), each measured position in cartesian coordinates like
-        zc = None
+        zc = delta_m  - (self.sensor_offset @ Rot).reshape(2,1)
         # [x coordinates;
         #  y coordinates]
-
-        zpred = None  # TODO (2, #measurements), predicted measurements, like
+        zpred = self.h(eta) # TODO (2, #measurements), predicted measurements, like
         # [ranges;
         #  bearings]
-        zr = None  # TODO, ranges
+        zr = zpred[::2]  # TODO, ranges (fetch every second element which is range1 range2 etc ...)
 
         Rpihalf = rotmat2d(np.pi / 2)
 
@@ -255,6 +273,19 @@ class EKFSLAM:
             inds = slice(ind, ind + 2)
 
             # TODO: Set H or Hx and Hm here
+
+            test1 = np.zeros([2,10])
+            test1[:, 2:] = (-Rpihalf @ (delta_m))
+            test1[block_nxm(0,0,2,2)] = -np.eye(2) 
+            test1 = zc.T / (np.linalg.norm(zc)) @ test1
+
+            Hx[block_nxm(i,0, 2, 3)] = test1
+
+            test2 = np.eye(2)
+            test2[0,:] = 1 / (zr[i]**2) * (zr[i] * delta_m[:, i].reshape(1,2))
+            test2[1,:] = 1 / (zr[i]**2) * (delta_m[: , i].reshape(1,2) @ Rpihalf)
+
+            Hm[block_nxm(i,i, 2, 2)] = test2
 
         # TODO: You can set some assertions here to make sure that some of the structure in H is correct
         return H
