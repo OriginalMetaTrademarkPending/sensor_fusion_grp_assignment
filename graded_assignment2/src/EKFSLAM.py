@@ -423,8 +423,6 @@ class EKFSLAM:
         Tuple[np.ndarray, np.ndarray, float, np.ndarray]
             updated eta, updated P, NIS, and the associations
         """
-       
-
         numLmk = (eta.size - 3) // 2
         assert (len(eta) - 3) % 2 == 0, "EKFSLAM.update: landmark lenght not even"
 
@@ -432,12 +430,9 @@ class EKFSLAM:
             # Prediction and innovation covariance
             zpred = self.h(eta)  # TODO
             H = self.h_jac(eta)  # TODO
-
-            
-            etpred, ppred = self.predict(eta, P.copy(), z.ravel())
             # Here you can use simply np.kron (a bit slow) to form the big (very big in VP after a while) R,
             # or be smart with indexing and broadcasting (3d indexing into 2d mat) realizing you are adding the same R on all diagonals
-            S = H@ppred@H.T +np.kron(np.eye(numLmk), self.R) # TODO,
+            S = H@P@H.T +np.kron(np.eye(numLmk), self.R) # TODO,
             assert (
                 S.shape == zpred.shape * 2
             ), "EKFSLAM.update: wrong shape on either S or zpred"
@@ -458,17 +453,17 @@ class EKFSLAM:
                 
                 # Kalman mean update
                 S_cho_factors = la.cho_factor(Sa) # Optional, used in places for S^-1, see scipy.linalg.cho_factor and scipy.linalg.cho_solve
-                W = ppred@Ha.T@S_cho_factors[0]  # TODO, Kalman gain, can use S_cho_factors
-                etaupd = etpred+W@(za-zpred)  # TODO, Kalman update
+                W = la.cho_solve(S_cho_factors, Ha@P).T  # TODO, Kalman gain, can use S_cho_factors
+                etaupd = eta+W@v  # TODO, Kalman update
 
                 # Kalman cov update: use Joseph form for stability
                 jo = -W @ Ha
                 # same as adding Identity mat
                 jo[np.diag_indices(jo.shape[0])] += 1
-                Pupd = jo@ppred@jo.T +W@np.kron(np.eye(len(W[0])//2), self.R)@W.T # TODO, Kalman update. This is the main workload on VP after speedups
+                Pupd = jo@P@jo.T +W@np.kron(np.eye(len(W[0])//2), self.R)@W.T # TODO, Kalman update. This is the main workload on VP after speedups
 
                 # calculate NIS, can use S_cho_factors
-                NIS = (za-zpred).T@S_cho_factors[0]@(za-zpred)  # TODO
+                NIS = v.T@la.cho_solve(S_cho_factors, v)  # TODO
 
                 # When tested, remove for speed
                 assert np.allclose(
